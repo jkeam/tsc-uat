@@ -12,5 +12,5 @@ Project combining Cucumber + Selenium Grid for fun UAT.
 1.  `docker-compose up` - start the selenium grid
 
 ### Second Shell
-1.  cd ./hellocucumber
+1.  `cd ./hellocucumber`
 2.  `mvn test` - run the tests
