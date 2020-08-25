@@ -41,15 +41,6 @@ RUN chown seluser /opt/selenium
 # END BASE
 
 # START NODE BASE
-#==============
-# Xvfb
-#==============
-RUN apt-get update -qqy \
-  && apt-get -qqy install \
-    xvfb \
-    pulseaudio \
-  && rm -rf /var/lib/apt/lists/* /var/cache/apt/*
-
 #==============================
 # Locale and encoding settings
 #==============================
@@ -70,23 +61,6 @@ RUN apt-get -qqy update \
   && apt-get -qyy autoremove \
   && rm -rf /var/lib/apt/lists/* \
   && apt-get -qyy clean
-
-#=====
-# VNC
-#=====
-RUN apt-get update -qqy \
-  && apt-get -qqy install \
-  x11vnc \
-  && rm -rf /var/lib/apt/lists/* /var/cache/apt/*
-
-#=========
-# fluxbox
-# A fast, lightweight and responsive window manager
-#=========
-RUN apt-get update -qqy \
-  && apt-get -qqy install \
-    fluxbox \
-  && rm -rf /var/lib/apt/lists/* /var/cache/apt/*
 
 #================
 # Font libraries
@@ -125,26 +99,12 @@ RUN apt-get -qqy update \
 #===================================================
 # Run the following commands as non-privileged user
 #===================================================
-
-# USER 1200
 USER seluser
 
 #==============================
-# Scripts to run Selenium Node and XVFB
+# Scripts to run Selenium Node
 #==============================
 COPY start-selenium-node.sh  /opt/bin/
-
-#==============================
-# Supervisor configuration file
-#==============================
-# COPY selenium.conf /etc/supervisor/conf.d/
-
-#==============================
-# Generating the VNC password as seluser
-# So the service can be started with seluser
-#==============================
-
-RUN mkdir -p /home/seluser/.vnc && x11vnc -storepasswd secret /home/seluser/.vnc/passwd
 
 #==========
 # Relaxing permissions for OpenShift and other non-sudo environments
@@ -152,13 +112,6 @@ RUN mkdir -p /home/seluser/.vnc && x11vnc -storepasswd secret /home/seluser/.vnc
 RUN sudo chmod -R 777 /home/seluser \
   && sudo chgrp -R 0 /home/seluser \
   && sudo chmod -R g=u /home/seluser
-
-#==============================
-# Scripts to run fluxbox and x11vnc
-#==============================
-COPY start-fluxbox.sh \
-      start-vnc.sh \
-      /opt/bin/
 
 #============================
 # Some configuration options
@@ -168,7 +121,6 @@ ENV SCREEN_HEIGHT 1020
 ENV SCREEN_DEPTH 24
 ENV SCREEN_DPI 96
 ENV DISPLAY :99.0
-ENV START_XVFB true
 
 #========================
 # Selenium Configuration
