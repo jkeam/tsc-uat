@@ -1,43 +1,26 @@
-FROM ubuntu:16.04
+FROM quay.io/tssc/tssc-base-java-8
 
-#================================================
-# Customize sources for apt-get
-#================================================
-RUN  echo "deb http://archive.ubuntu.com/ubuntu xenial main universe\n" > /etc/apt/sources.list \
-  && echo "deb http://archive.ubuntu.com/ubuntu xenial-updates main universe\n" >> /etc/apt/sources.list \
-  && echo "deb http://security.ubuntu.com/ubuntu xenial-security main universe\n" >> /etc/apt/sources.list
-
-#========================
-# Miscellaneous packages
-# Includes minimal runtime used for executing non GUI Java programs
-#========================
-RUN apt-get update -qqy \
-  && apt-get -qqy --no-install-recommends install \
-    bzip2 \
-    ca-certificates \
-    openjdk-8-jre-headless \
-    sudo \
-    unzip \
-    wget \
-  && rm -rf /var/lib/apt/lists/* \
-  && sed -i 's/securerandom\.source=file:\/dev\/random/securerandom\.source=file:\/dev\/urandom/' ./usr/lib/jvm/java-8-openjdk-amd64/jre/lib/security/java.security
-
+USER root
 #==========
 # Selenium
 #==========
 RUN  mkdir -p /opt/selenium \
-  && wget --no-verbose https://selenium-release.storage.googleapis.com/3.141/selenium-server-standalone-3.141.59.jar -O /opt/selenium/selenium-server-standalone.jar
+  && curl -o /opt/selenium/selenium-server-standalone.jar https://selenium-release.storage.googleapis.com/3.141/selenium-server-standalone-3.141.59.jar
 
 #========================================
-# Add normal user with passwordless sudo
+# Add normal user with passwordless
 #========================================
-RUN sudo useradd seluser --shell /bin/bash --create-home \
-  && sudo usermod -a -G sudo seluser \
-  && echo 'ALL ALL = (ALL) NOPASSWD: ALL' >> /etc/sudoers \
-  && echo 'seluser:secret' | chpasswd
+RUN useradd seluser --shell /bin/bash --create-home \
+  && usermod -aG seluser seluser
 
 RUN chown seluser /opt/selenium
 
+#==========
+# Relaxing permissions
+#==========
+RUN chmod -R 777 /home/seluser \
+  && chgrp -R 0 /home/seluser \
+  && chmod -R g=u /home/seluser
 # END BASE
 
 # START NODE BASE
@@ -49,69 +32,17 @@ ENV LANG_WHERE US
 ENV ENCODING UTF-8
 ENV LANGUAGE ${LANG_WHICH}_${LANG_WHERE}.${ENCODING}
 ENV LANG ${LANGUAGE}
-# Layer size: small: ~9 MB
-# Layer size: small: ~9 MB MB (with --no-install-recommends)
-RUN apt-get -qqy update \
-  && apt-get -qqy --no-install-recommends install \
-    language-pack-en \
-    tzdata \
-    locales \
-  && locale-gen ${LANGUAGE} \
-  && dpkg-reconfigure --frontend noninteractive locales \
-  && apt-get -qyy autoremove \
-  && rm -rf /var/lib/apt/lists/* \
-  && apt-get -qyy clean
 
-#================
-# Font libraries
-#================
-# libfontconfig            ~1 MB
-# libfreetype6             ~1 MB
-# xfonts-cyrillic          ~2 MB
-# xfonts-scalable          ~2 MB
-# fonts-liberation         ~3 MB
-# fonts-ipafont-gothic     ~13 MB
-# fonts-wqy-zenhei         ~17 MB
-# fonts-tlwg-loma-otf      ~300 KB
-# ttf-ubuntu-font-family   ~5 MB
-#   Ubuntu Font Family, sans-serif typeface hinted for clarity
-# Removed packages:
-# xfonts-100dpi            ~6 MB
-# xfonts-75dpi             ~6 MB
-# Regarding fonts-liberation see:
-#  https://github.com/SeleniumHQ/docker-selenium/issues/383#issuecomment-278367069
-# Layer size: small: 36.28 MB (with --no-install-recommends)
-# Layer size: small: 36.28 MB
-RUN apt-get -qqy update \
-  && apt-get -qqy --no-install-recommends install \
-    libfontconfig \
-    libfreetype6 \
-    xfonts-cyrillic \
-    xfonts-scalable \
-    fonts-liberation \
-    fonts-ipafont-gothic \
-    fonts-wqy-zenhei \
-    fonts-tlwg-loma-otf \
-    ttf-ubuntu-font-family \
-  && rm -rf /var/lib/apt/lists/* \
-  && apt-get -qyy clean
+#==============================
+# Scripts to run Selenium Node
+#==============================
+COPY generate_chrome_config start-selenium-node.sh /opt/bin/
+RUN chmod +x /opt/bin/generate_chrome_config /opt/bin/start-selenium-node.sh
 
 #===================================================
 # Run the following commands as non-privileged user
 #===================================================
 USER seluser
-
-#==============================
-# Scripts to run Selenium Node
-#==============================
-COPY start-selenium-node.sh  /opt/bin/
-
-#==========
-# Relaxing permissions for OpenShift and other non-sudo environments
-#==========
-RUN sudo chmod -R 777 /home/seluser \
-  && sudo chgrp -R 0 /home/seluser \
-  && sudo chmod -R g=u /home/seluser
 
 #============================
 # Some configuration options
@@ -149,70 +80,57 @@ ENV GRID_DEBUG false
 # Following line fixes https://github.com/SeleniumHQ/docker-selenium/issues/87
 ENV DBUS_SESSION_BUS_ADDRESS=/dev/null
 
-# Creating base directory for Xvfb
-RUN  sudo mkdir -p /tmp/.X11-unix && sudo chmod 1777 /tmp/.X11-unix
+# Generating a default config during build time
+RUN /opt/bin/generate_chrome_config > /opt/selenium/config.json
 
 EXPOSE 5900
 # END NODE BASE
 
-# Start CHROME
+# START CHROME
 USER root
-# Chrome
 #============================================
 # Google Chrome
 #============================================
-# can specify versions by CHROME_VERSION;
-#  e.g. google-chrome-stable=53.0.2785.101-1
-#       google-chrome-beta=53.0.2785.92-1
-#       google-chrome-unstable=54.0.2840.14-1
-#       latest (equivalent to google-chrome-stable)
-#       google-chrome-beta  (pull latest beta)
-#============================================
-ARG CHROME_VERSION="google-chrome-stable"
-RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - \
-  && echo "deb http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list \
-  && apt-get update -qqy \
-  && apt-get -qqy install \
-    ${CHROME_VERSION:-google-chrome-stable} \
-  && rm /etc/apt/sources.list.d/google-chrome.list \
-  && rm -rf /var/lib/apt/lists/* /var/cache/apt/*
+ADD google-chrome.repo /etc/yum.repos.d/google-chrome.repo
+RUN yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm \
+    http://mirror.centos.org/centos/8/BaseOS/x86_64/os/Packages/liberation-fonts-2.00.3-7.el8.noarch.rpm \
+    http://mirror.centos.org/centos/8/BaseOS/x86_64/os/Packages/liberation-fonts-common-2.00.3-7.el8.noarch.rpm \
+    http://mirror.centos.org/centos/8/BaseOS/x86_64/os/Packages/liberation-mono-fonts-2.00.3-7.el8.noarch.rpm \
+    http://mirror.centos.org/centos/8/BaseOS/x86_64/os/Packages/liberation-sans-fonts-2.00.3-7.el8.noarch.rpm \
+    http://mirror.centos.org/centos/8/BaseOS/x86_64/os/Packages/liberation-serif-fonts-2.00.3-7.el8.noarch.rpm \
+    http://mirror.centos.org/centos/8/AppStream/x86_64/os/Packages/xdg-utils-1.1.2-5.el8.noarch.rpm \
+    http://mirror.centos.org/centos/8/AppStream/x86_64/os/Packages/desktop-file-utils-0.23-8.el8.x86_64.rpm \
+    http://mirror.centos.org/centos/8/AppStream/x86_64/os/Packages/vulkan-loader-1.2.135.0-1.el8.x86_64.rpm \
+    http://mirror.centos.org/centos/8/AppStream/x86_64/os/Packages/mesa-vulkan-drivers-19.3.4-2.el8.x86_64.rpm \
+    http://mirror.centos.org/centos/8/AppStream/x86_64/os/Packages/llvm-libs-9.0.1-5.module_el8.2.0+461+2e15bd5f.x86_64.rpm \
+    http://mirror.centos.org/centos/8/AppStream/x86_64/os/Packages/libappindicator-gtk3-12.10.0-19.el8.x86_64.rpm \
+    http://mirror.centos.org/centos/8/AppStream/x86_64/os/Packages/libdbusmenu-16.04.0-12.el8.x86_64.rpm \
+    http://mirror.centos.org/centos/8/AppStream/x86_64/os/Packages/libdbusmenu-gtk3-16.04.0-12.el8.x86_64.rpm \
+    http://mirror.centos.org/centos/8/AppStream/x86_64/os/Packages/libindicator-gtk3-12.10.1-14.el8.x86_64.rpm
+RUN yum update && yum install -y google-chrome-stable
 
 #=================================
 # Chrome Launch Script Wrapper
 #=================================
 COPY wrap_chrome_binary /opt/bin/wrap_chrome_binary
 RUN chmod +x /opt/bin/wrap_chrome_binary
-RUN chmod +x /opt/bin/start-selenium-node.sh
 RUN /opt/bin/wrap_chrome_binary
 
-USER seluser
-
 #============================================
-# Chrome webdriver
+# Chrome Webdriver
 #============================================
-# can specify versions by CHROME_DRIVER_VERSION
-# Latest released version will be used by default
-#============================================
-ARG CHROME_DRIVER_VERSION
 RUN if [ -z "$CHROME_DRIVER_VERSION" ]; \
   then CHROME_MAJOR_VERSION=$(google-chrome --version | sed -E "s/.* ([0-9]+)(\.[0-9]+){3}.*/\1/") \
     && CHROME_DRIVER_VERSION=$(wget --no-verbose -O - "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_${CHROME_MAJOR_VERSION}"); \
   fi \
   && echo "Using chromedriver version: "$CHROME_DRIVER_VERSION \
-  && wget --no-verbose -O /tmp/chromedriver_linux64.zip https://chromedriver.storage.googleapis.com/$CHROME_DRIVER_VERSION/chromedriver_linux64.zip \
-  && rm -rf /opt/selenium/chromedriver \
-  && unzip /tmp/chromedriver_linux64.zip -d /opt/selenium \
-  && rm /tmp/chromedriver_linux64.zip \
-  && mv /opt/selenium/chromedriver /opt/selenium/chromedriver-$CHROME_DRIVER_VERSION \
-  && chmod 755 /opt/selenium/chromedriver-$CHROME_DRIVER_VERSION \
-  && sudo ln -fs /opt/selenium/chromedriver-$CHROME_DRIVER_VERSION /usr/bin/chromedriver
+  && curl -o /home/seluser/chromedriver.zip "https://chromedriver.storage.googleapis.com/$CHROME_DRIVER_VERSION/chromedriver_linux64.zip" \
+  && unzip /home/seluser/chromedriver.zip -d /home/seluser/ \
+  && rm /home/seluser/chromedriver.zip
+RUN mv -f /home/seluser/chromedriver /usr/local/bin/chromedriver \
+  && chown seluser:seluser /usr/local/bin/chromedriver \
+  && chmod 0755 /usr/local/bin/chromedriver
 
-USER root
-COPY generate_chrome_config /opt/bin/generate_chrome_config
-RUN chmod +x /opt/bin/generate_chrome_config
 USER seluser
-
-# Generating a default config during build time
-RUN /opt/bin/generate_chrome_config > /opt/selenium/config.json
 
 CMD ["/opt/bin/start-selenium-node.sh"]
