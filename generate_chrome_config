@@ -6,22 +6,22 @@ cat <<_EOF
 {
   "capabilities": [
     {
-      "version": "$CHROME_VERSION",
+      "version": "85",
       "browserName": "chrome",
-      "maxInstances": $NODE_MAX_INSTANCES,
+      "maxInstances": 1,
       "seleniumProtocol": "WebDriver",
-      "applicationName": "$NODE_APPLICATION_NAME"
+      "applicationName": "TSSC UAT"
     }
   ],
   "proxy": "org.openqa.grid.selenium.proxy.DefaultRemoteProxy",
-  "maxSession": $NODE_MAX_SESSION,
-  "host": "$NODE_HOST",
-  "port": $NODE_PORT,
+  "maxSession": 1,
+  "host": 0.0.0.0
+  "port": 5555,
   "register": true,
-  "registerCycle": $NODE_REGISTER_CYCLE,
-  "nodePolling": $NODE_POLLING,
-  "unregisterIfStillDownAfter": $NODE_UNREGISTER_IF_STILL_DOWN_AFTER,
-  "downPollingLimit": $NODE_DOWN_POLLING_LIMIT,
-  "debug": $GRID_DEBUG
+  "registerCycle": 5000,
+  "nodePolling": 5000,
+  "unregisterIfStillDownAfter": 60000,
+  "downPollingLimit": 2,
+  "debug": false
 }
 _EOF
