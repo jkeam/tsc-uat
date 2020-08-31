@@ -13,6 +13,10 @@
         <cucumber.version>6.5.0</cucumber.version>
         <junit.version>4.13</junit.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <selenium.version>3.141.59</selenium.version>
+        <selenium.hub.host>localhost</selenium.hub.host>
+        <selenium.hub.port>4444</selenium.hub.port>
+        <target.base.url>http://127.0.0.1:8080</target.base.url>
     </properties>
 
     <dependencies>
