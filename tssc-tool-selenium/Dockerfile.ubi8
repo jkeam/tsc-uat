@@ -19,6 +19,7 @@ RUN mkdir -p /opt/selenium && \
     curl -L https://selenium-release.storage.googleapis.com/3.141/selenium-server-standalone-3.141.59.jar -o /opt/selenium/selenium-server-standalone.jar && \
     chmod 775 /opt/selenium && \
     chown 1001:0 /opt/selenium
+
 #################################################
 # Download and Install Selenium Node for Chrome #
 #################################################
@@ -27,7 +28,6 @@ RUN mkdir -p /opt/selenium_node && \
     chmod 775 /opt/selenium_node && \
     chown 1001:0 /opt/selenium_node && \
     chown 1001:0 /usr/bin
-################################################
 
 ########################################################
 # Add Chrome Dependencies for Selenium Node for Chrome #
@@ -65,7 +65,6 @@ RUN if [ -z "$CHROME_DRIVER_VERSION" ]; \
 RUN mv -f /home/tssc/chromedriver /usr/local/bin/chromedriver \
   && chown 1001:0 /usr/local/bin/chromedriver \
   && chmod 0755 /usr/local/bin/chromedriver
-#######################################################
 
 ################################################
 # Configure Environment Variables for Selenium #
@@ -84,7 +83,6 @@ ENV GRID_HUB_PORT 4444
 ENV GRID_HUB_HOST "0.0.0.0"
 
 COPY generate_config start-selenium-hub.sh /opt/bin/
-###############################################
 
 ###############################################################
 # Configure Environment Variables for Selenium Node for Chome #
@@ -109,7 +107,6 @@ ENV GRID_DEBUG false
 ENV DBUS_SESSION_BUS_ADDRESS=/dev/null
 
 COPY generate_chrome_config start-selenium-node.sh /opt/bin/
-###############################################################
 
 ###################################################
 # Copy Startup Script and Make Scripts Executable #
@@ -126,21 +123,18 @@ RUN chmod +x /opt/bin/generate_config
 RUN chmod +x /opt/bin/generate_chrome_config
 
 USER 1001
-###################################################
 
 ###############
 # Run Configs #
 ###############
 RUN /opt/bin/generate_config > /opt/selenium/config.json
 RUN /opt/bin/generate_chrome_config > /opt/selenium_node/config.json
-###############
 
 #################################
 # Expose Ports for Hub and Node #
 #################################
 EXPOSE 4444
 EXPOSE 5555
-#################################
 
 ENTRYPOINT ["/opt/bin/start-selenium.sh"]
 
